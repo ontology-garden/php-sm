@@ -1,0 +1,5 @@
+BasedOnStyle: Google
+DerivePointerAlignment: false
+MaxEmptyLinesToKeep: 1
+TabWidth: 2
+SortIncludes: false
