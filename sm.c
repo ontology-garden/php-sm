@@ -30,7 +30,6 @@
 #include <openssl/evp.h>
 #include <openssl/bn.h>
 #include <openssl/pem.h>
-#include "php_openssl.h"
 
 static int le_sm;
 
