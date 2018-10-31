@@ -106,11 +106,12 @@ PHP_FUNCTION(sm2_pkey_from_pri) {
   }
 
   key_tid = zend_fetch_list_dtor_id(openssl_key_typename);
-  RETURN_RES(zend_register_resource(pkey, key_tid));
+  zend_resource* res = zend_register_resource(pkey, key_tid);
+  RETVAL_RES(res);
   ok = 1;
 
 done:
-  if (ok) {
+  if (!ok) {
     if (ec_key != NULL) {
       EC_KEY_free(ec_key);
     }
@@ -124,7 +125,6 @@ done:
   if (pub_b != NULL) {
     EC_POINT_free(pub_b);
   }
-  RETURN_FALSE;
 }
 
 PHP_FUNCTION(sm2_pkey_from_pub) {
@@ -172,11 +172,11 @@ PHP_FUNCTION(sm2_pkey_from_pub) {
   }
 
   key_tid = zend_fetch_list_dtor_id(openssl_key_typename);
-  RETURN_RES(zend_register_resource(pkey, key_tid));
+  RETVAL_RES(zend_register_resource(pkey, key_tid));
   ok = 1;
 
 done:
-  if (ok) {
+  if (!ok) {
     if (ec_key != NULL) {
       EC_KEY_free(ec_key);
     }
@@ -187,7 +187,6 @@ done:
   if (pub_b != NULL) {
     EC_POINT_free(pub_b);
   }
-  RETURN_FALSE;
 }
 
 PHP_FUNCTION(sm2_pkey_get_public) {
@@ -260,7 +259,7 @@ PHP_FUNCTION(sm2_pkey_get_public) {
   }
 
   bin_len = EC_POINT_point2buf(group, point, form, &bin, NULL);
-  RETVAL_STRINGL(bin, bin_len);
+  RETVAL_STRINGL((const char*)bin, bin_len);
 
 done:
   if (group != NULL) {
@@ -334,7 +333,7 @@ PHP_FUNCTION(sm2_pkey_get_private) {
   }
 
   BN_bn2bin(k, bin);
-  RETVAL_STRINGL(bin, bin_len);
+  RETVAL_STRINGL((const char*)bin, bin_len);
 
 done:
   if (hr != NULL) {
@@ -345,8 +344,8 @@ done:
   }
 }
 
-int sm2_sign(const char* data, size_t data_len, EVP_PKEY* pkey,
-             smart_str* out) {
+int php_sm2_sign(const char* data, size_t data_len, EVP_PKEY* pkey,
+                 smart_str* out) {
   EVP_MD_CTX* md_ctx = NULL;
   EVP_PKEY_CTX* pk_ctx = NULL;
   zend_string* sigbuf = NULL;
@@ -390,7 +389,7 @@ int sm2_sign(const char* data, size_t data_len, EVP_PKEY* pkey,
   siglen = EVP_PKEY_size(pkey);
   sigbuf = zend_string_alloc(siglen, 0);
 
-  sig_buf_p = ZSTR_VAL(sigbuf);
+  sig_buf_p = (unsigned char*)ZSTR_VAL(sigbuf);
   if (!EVP_DigestSignUpdate(md_ctx, data, data_len) ||
       !EVP_DigestSignFinal(md_ctx, sig_buf_p, &siglen)) {
     goto done;
@@ -446,7 +445,7 @@ PHP_FUNCTION(sm2_sign) {
 
   if (pkey == NULL) RETURN_FALSE;
 
-  sig_ok = sm2_sign(data, data_len, pkey, &sig);
+  sig_ok = php_sm2_sign((const char*)data, data_len, pkey, &sig);
   if (!sig_ok) {
     RETVAL_FALSE;
   }
@@ -483,7 +482,7 @@ PHP_FUNCTION(sm2_sign_with_pem) {
     goto done;
   }
 
-  sig_ok = sm2_sign(data, data_len, pkey, &sig);
+  sig_ok = php_sm2_sign((const char*)data, data_len, pkey, &sig);
   if (!sig_ok) {
     RETVAL_FALSE;
     goto done;
@@ -501,8 +500,8 @@ done:
   }
 }
 
-int sm2_verify(const char* data, size_t data_len, const char* sig,
-               size_t sig_len, EVP_PKEY* pkey) {
+int php_sm2_verify(const char* data, size_t data_len, const char* sig,
+                   size_t sig_len, EVP_PKEY* pkey) {
   char* r_buf = NULL;
   char* s_buf = NULL;
   BIGNUM* r = NULL;
@@ -558,7 +557,7 @@ int sm2_verify(const char* data, size_t data_len, const char* sig,
     goto done;
   }
 
-  unsigned char* sig_d_p = sig_d;
+  unsigned char* sig_d_p = (unsigned char*)sig_d;
   sig_d_len = i2d_ECDSA_SIG(sig_i, &sig_d_p);
   if (!sig_d_len) {
     err = -1;
@@ -593,7 +592,7 @@ int sm2_verify(const char* data, size_t data_len, const char* sig,
     goto done;
   }
 
-  err = EVP_VerifyFinal(md_ctx, sig_d, sig_d_len, pkey);
+  err = EVP_VerifyFinal(md_ctx, (const unsigned char*)sig_d, sig_d_len, pkey);
 
 done:
   if (r_buf != NULL) {
@@ -646,7 +645,8 @@ PHP_FUNCTION(sm2_verify) {
 
   if (pkey == NULL) RETURN_LONG(-1);
 
-  err = sm2_verify(data, data_len, sig, sig_len, pkey);
+  err = php_sm2_verify((const char*)data, data_len, (const char*)sig, sig_len,
+                       pkey);
   RETURN_LONG(err);
 }
 
@@ -679,7 +679,8 @@ PHP_FUNCTION(sm2_verify_with_pem) {
     goto done;
   }
 
-  err = sm2_verify(data, data_len, sig, sig_len, pkey);
+  err = php_sm2_verify((const char*)data, data_len, (const char*)sig, sig_len,
+                       pkey);
   RETVAL_LONG(err);
 
 done:
